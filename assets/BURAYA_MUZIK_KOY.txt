@@ -1,0 +1,3 @@
+Arka plan muzigini bu klasore "music.mp3" adiyla yukle (en fazla 25 MB).
+Muzik yoksa video sadece sesle yapilir. Muzik videodan kisaysa basa sarar.
+Ses seviyeleri: konusma %80, muzik %20.

@@ -1,0 +1,111 @@
+TELEGRAM VIDEO BOT - KURULUM (v2)  -  sadece bilgisayardan, sadece GitHub web sitesi
+===================================================================================
+
+Bu pakette "demo renderer" var (koyu mavi ekran + kelimeler). Sistemin calistigini
+test etmek icindir. Gercek video stili sonra eklenecek.
+
+-----------------------------------------------------------------------------------
+ADIM 1 - Telegram bot token'i
+-----------------------------------------------------------------------------------
+Telegram'da BotFather -> /newbot -> isim ver -> kullanici adi ver (sonu "bot" olsun).
+BotFather sana uzun bir TOKEN verir. Kopyala, kimseyle paylasma.
+
+-----------------------------------------------------------------------------------
+ADIM 2 - Yeni GitHub deposu
+-----------------------------------------------------------------------------------
+1. github.com -> sag ustte  +  -> "New repository".
+2. Repository name:  video-bot
+3. "Public" secili olsun.
+4. "Add a README file" kutusunu ISARETLE.
+5. Yesil "Create repository" dugmesine bas.
+
+-----------------------------------------------------------------------------------
+ADIM 3 - Zip'i ac
+-----------------------------------------------------------------------------------
+telegram-video-bot-v2.zip -> sag tik -> "Tumunu ayikla". Acilan klasorun ICINDE sunlar var:
+   bot   renderer   assets   poll.yml   render.yml   README.txt   KURULUM_ADIM_ADIM.txt
+
+-----------------------------------------------------------------------------------
+ADIM 4 - Dosyalari yukle
+-----------------------------------------------------------------------------------
+1. GitHub'da deponun ANA SAYFASINDA (Code sekmesi) ol.
+2. "Add file" -> "Upload files".
+3. Ayikladigin klasorun ICINDEKI her seyi sec (Ctrl + A), sayfadaki kutuya surukle-birak.
+4. Yukleme bitince asagidaki yesil "Commit changes" dugmesine bas.
+5. KONTROL: ana sayfada  bot, renderer, assets, poll.yml, render.yml  gorunmeli.
+
+-----------------------------------------------------------------------------------
+ADIM 5 - poll.yml ve render.yml'yi dogru klasore tasi
+-----------------------------------------------------------------------------------
+Bu iki dosya  .github/workflows  klasorunde olmak zorunda. Tasima (yapistirma yok):
+1. Ana sayfada  poll.yml  yazisina bas.
+2. Sag ustteki KALEM simgesine (Edit this file) bas.
+3. Ustte dosya adi kutusunda "poll.yml" yazar. Kutuya tikla, klavyede HOME tusuna bas
+   (imlec en basa gider) ve aynen sunu yaz:   .github/workflows/
+   Kutuda artik  .github/workflows/poll.yml  gibi gorunmeli.
+4. Sag ustteki yesil "Commit changes..." dugmesine bas, acilan kutuda yine yesil
+   "Commit changes".
+5. AYNISINI render.yml icin yap.   (Hep ana sayfadan baslat, baska klasorun icinden degil.)
+6. KONTROL: ana sayfada artik ".github/workflows" klasoru gorunmeli, icinde
+   poll.yml ve render.yml olmali. Ana sayfada poll.yml/render.yml kalmamali.
+
+-----------------------------------------------------------------------------------
+ADIM 6 - Izin
+-----------------------------------------------------------------------------------
+Settings (ustteki sekme) -> sol menu "Actions" -> "General" -> asagi kaydir ->
+"Workflow permissions" -> "Read and write permissions" sec -> "Save".
+
+-----------------------------------------------------------------------------------
+ADIM 7 - Token'i kaydet (secret)
+-----------------------------------------------------------------------------------
+Settings -> sol menu "Secrets and variables" -> altindaki "Actions" -> yesil
+"New repository secret".
+   Name:   TELEGRAM_BOT_TOKEN
+   Secret: BotFather'in verdigi token
+"Add secret".
+
+-----------------------------------------------------------------------------------
+ADIM 8 - Botu calistir, numaranı al
+-----------------------------------------------------------------------------------
+1. Ustteki "Actions" sekmesi -> (cikarsa "I understand my workflows..." dugmesine bas)
+   -> sol listede "poll" -> sagda "Run workflow" -> yesil "Run workflow".
+2. Telegram'da botuna git, Start'a bas, /start yaz.
+3. Actions'ta poll'u bir daha "Run workflow" ile calistir (veya 5-10 dk bekle).
+4. Bot "Senin Telegram ID'n: 123456789" yazar. O sayiyi kopyala.
+
+-----------------------------------------------------------------------------------
+ADIM 9 - Numarayi kaydet
+-----------------------------------------------------------------------------------
+Settings -> Secrets and variables -> Actions -> New repository secret
+   Name:   ALLOWED_USER_ID
+   Secret: o sayi
+"Add secret".
+
+-----------------------------------------------------------------------------------
+ADIM 10 - Test
+-----------------------------------------------------------------------------------
+Botuna /test yaz. 5-10 dk icinde "Test render basladi", birkac dakika sonra
+"Video hazir" + indirme linki gelir.
+
+-----------------------------------------------------------------------------------
+ADIM 11 - Muzik (istege bagli)
+-----------------------------------------------------------------------------------
+Depoda "assets" klasorune gir -> "Add file" -> "Upload files" -> muzigi surukle.
+Adi  music.mp3  olmali (25 MB'tan kucuk).
+
+-----------------------------------------------------------------------------------
+GUNLUK KULLANIM
+-----------------------------------------------------------------------------------
+1. Botuna senaryo METNINI yaz/yapistir.
+2. Sonra seslendirdigin MP3'u gonder (max 20 MB, WAV degil MP3).
+3. "Render basladi" mesajini bekle. Video bitince link gelir.
+4. Hemen silmek icin /sil. Yoksa link 24 saatte silinir.
+Komutlar: /test  /sil  /yardim
+
+-----------------------------------------------------------------------------------
+SORUN GIDERME
+-----------------------------------------------------------------------------------
+* Bot cevap vermiyor: Actions'ta "poll" calismalari yesil mi? Kirmizi ise tikla,
+  hata yazisini (token'siz) bana yapistir.
+* Depo 60 gun kullanilmazsa zamanlayici kapanir: Actions -> poll -> "Enable workflow".
+* Token'i yanlislikla paylasirsan BotFather'da /revoke yaz, yeni token'i secret'a koy.

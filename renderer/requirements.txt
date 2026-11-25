@@ -1,0 +1,2 @@
+# Gercek stil kodu ek Python paketleri isterse buraya yazilir (her satira bir paket).
+# Demo renderer'in ek pakete ihtiyaci yok.

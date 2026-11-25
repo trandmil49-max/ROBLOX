@@ -1,0 +1,114 @@
+name: render
+
+on:
+  workflow_dispatch:
+    inputs:
+      audio_file_id:
+        description: "Telegram ses dosyasi (TEST = deneme)"
+        required: true
+      script:
+        description: "Senaryo metni"
+        required: false
+        default: ""
+      chat_id:
+        description: "Telegram sohbet numarasi"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  VIDEO_W: "1920"
+  VIDEO_H: "1080"
+  VIDEO_FPS: "60"
+  CHUNK_SECONDS: "10"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      chunks: ${{ steps.plan.outputs.chunks }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        name: Sesi hazirla ve parcalara bol
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          AUDIO_FILE_ID: ${{ inputs.audio_file_id }}
+          SCRIPT: ${{ inputs.script }}
+        run: python3 bot/prepare.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: input
+          path: work/
+          retention-days: 1
+
+  render:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      max-parallel: 20
+      matrix:
+        chunk: ${{ fromJSON(needs.prepare.outputs.chunks) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: input
+          path: work
+      - name: Yazi tipi ve ffmpeg kontrolu
+        run: |
+          fc-list | grep -qi "DejaVuSans-Bold" || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core)
+          ffmpeg -version | head -1
+      - name: Ek paketler
+        run: |
+          if grep -qvE '^\s*(#|$)' renderer/requirements.txt; then pip install -r renderer/requirements.txt; fi
+      - name: Parcayi render et
+        run: |
+          N=$(printf "%04d" "${{ matrix.chunk }}")
+          python3 renderer/render_chunk.py --work work --chunk "${{ matrix.chunk }}" --out "out/chunk_${N}.mp4"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chunk-${{ matrix.chunk }}
+          path: out/*.mp4
+          retention-days: 1
+
+  merge:
+    needs: [prepare, render]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: input
+          path: work
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chunk-*
+          merge-multiple: true
+          path: chunks
+      - name: Birlestir
+        run: bash bot/finish.sh
+      - name: Yayinla ve Telegram'a gonder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ inputs.chat_id }}
+        run: bash bot/publish.sh
+
+  notify_failure:
+    needs: [prepare, render, merge]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hata mesaji
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ inputs.chat_id }}
+        run: |
+          python3 bot/notify.py "Render basarisiz oldu. Ayrinti: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
