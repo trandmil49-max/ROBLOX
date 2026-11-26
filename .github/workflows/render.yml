@@ -25,12 +25,14 @@ env:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       chunks: ${{ steps.plan.outputs.chunks }}
     steps:
       - uses: actions/checkout@v4
+      - name: ffmpeg kur
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core jq
       - id: plan
         name: Sesi hazirla ve parcalara bol
         env:
@@ -46,7 +48,7 @@ jobs:
 
   render:
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
       fail-fast: true
@@ -59,10 +61,8 @@ jobs:
         with:
           name: input
           path: work
-      - name: Yazi tipi ve ffmpeg kontrolu
-        run: |
-          fc-list | grep -qi "DejaVuSans-Bold" || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core)
-          ffmpeg -version | head -1
+      - name: ffmpeg kur
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core jq
       - name: Ek paketler
         run: |
           if grep -qvE '^\s*(#|$)' renderer/requirements.txt; then pip install -r renderer/requirements.txt; fi
@@ -78,10 +78,12 @@ jobs:
 
   merge:
     needs: [prepare, render]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: ffmpeg kur
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core jq
       - uses: actions/download-artifact@v4
         with:
           name: input
@@ -103,7 +105,7 @@ jobs:
   notify_failure:
     needs: [prepare, render, merge]
     if: ${{ failure() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Hata mesaji
