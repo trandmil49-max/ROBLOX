@@ -1,0 +1,32 @@
+name: poll
+# Listens to Telegram for ~100 seconds. cron-job.org wakes this workflow every couple of minutes
+# (POST /repos/OWNER/REPO/actions/workflows/poll.yml/dispatches).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'      # slow backup in case the external trigger stops
+concurrency:
+  group: telegram-poll
+  cancel-in-progress: false
+permissions:
+  actions: write
+  contents: read
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-bot.txt
+      - run: python bot/poll.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_CHAT_ID: ${{ secrets.ALLOWED_CHAT_ID }}
+          TOKEN_EXPIRES: ${{ secrets.TOKEN_EXPIRES }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          POLL_SECONDS: '100'

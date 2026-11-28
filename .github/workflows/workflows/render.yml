@@ -1,0 +1,216 @@
+name: render
+run-name: "render #${{ github.run_number }} (${{ inputs.mode }}, ${{ inputs.quality }})"
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: Telegram chat to report to
+        required: true
+        type: string
+      story_b64:
+        description: Story file (base64)
+        required: false
+        default: ''
+        type: string
+      audio_file_id:
+        description: Telegram file id of the voice recording
+        required: false
+        default: ''
+        type: string
+      quality:
+        description: final | draft | test
+        required: false
+        default: final
+        type: string
+      mode:
+        description: user | demo
+        required: false
+        default: user
+        type: string
+permissions:
+  contents: write
+  actions: read
+env:
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TOKEN_EXPIRES: ${{ secrets.TOKEN_EXPIRES }}
+  CHAT_ID: ${{ inputs.chat_id }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+jobs:
+  progress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - run: python bot/progress.py
+        env:
+          RUN_ID: ${{ github.run_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng fonts-noto-core ffmpeg
+          pip install -r requirements-plan.txt
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-model-small-v1
+      - name: Get story and voice
+        env:
+          STORY_B64: ${{ inputs.story_b64 }}
+          AUDIO_FILE_ID: ${{ inputs.audio_file_id }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          mkdir -p work/plan
+          if [ "$MODE" = "demo" ]; then
+            cp examples/demo_story_en.txt work/story.txt
+            python3 - <<'PY'
+          import re
+          t = open('work/story.txt').read()
+          open('work/narr.txt', 'w').write(' '.join(l.split('::', 1)[1].strip() for l in t.splitlines() if '::' in l))
+          PY
+            espeak-ng -v en-us -s 150 -f work/narr.txt -w work/voice_raw.wav
+          else
+            echo "$STORY_B64" | base64 -d > work/story.txt
+            python3 -c "
+          import sys; sys.path.insert(0, 'bot')
+          import tg
+          assert tg.download('$AUDIO_FILE_ID', 'work/voice_raw'), 'could not download the voice recording'
+          "
+          fi
+          ffmpeg -v error -y -i work/voice_raw* -vn -c:a libmp3lame -b:a 192k work/plan/voice.mp3
+      - name: Plan
+        id: plan
+        env:
+          QUALITY: ${{ inputs.quality }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          SHARDS=20; if [ "$MODE" = "demo" ]; then SHARDS=10; fi
+          python3 engine/make_plan.py --story work/story.txt --voice work/plan/voice.mp3 --out work/plan --quality "$QUALITY" --shards $SHARDS | tee work/plan.log
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          p = json.load(open('work/plan/plan.json'))
+          print('shards=' + json.dumps(list(range(len(p['shards'])))))
+          PY
+          python3 - <<'PY'
+          import json, sys
+          sys.path.insert(0, 'bot')
+          import tg, messages as T
+          p = json.load(open('work/plan/plan.json'))
+          import os
+          a = p['align']['info']
+          tg.send(os.environ['CHAT_ID'], T.PLAN_READY.format(shots=len(p['shots']), seconds=int(p['duration']), align=a, pct=6, left=94))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: work/plan
+          retention-days: 2
+
+  render:
+    name: render (${{ matrix.shard }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender and tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends blender xvfb python3-pil python3-numpy python3-opencv ffmpeg fonts-noto-core python3-pip
+          pip3 install --break-system-packages -q arabic-reshaper python-bidi || true
+          blender --version | head -1
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: work/plan
+      - name: Render chunk 1/5
+        run: python3 engine/run_shard.py --plan work/plan/plan.json --work work --index ${{ matrix.shard }} --chunk 0 --chunks 5 --faces work/plan/frames/_faces
+      - name: Render chunk 2/5
+        run: python3 engine/run_shard.py --plan work/plan/plan.json --work work --index ${{ matrix.shard }} --chunk 1 --chunks 5 --faces work/plan/frames/_faces
+      - name: Render chunk 3/5
+        run: python3 engine/run_shard.py --plan work/plan/plan.json --work work --index ${{ matrix.shard }} --chunk 2 --chunks 5 --faces work/plan/frames/_faces
+      - name: Render chunk 4/5
+        run: python3 engine/run_shard.py --plan work/plan/plan.json --work work --index ${{ matrix.shard }} --chunk 3 --chunks 5 --faces work/plan/frames/_faces
+      - name: Render chunk 5/5
+        run: python3 engine/run_shard.py --plan work/plan/plan.json --work work --index ${{ matrix.shard }} --chunk 4 --chunks 5 --faces work/plan/frames/_faces
+      - name: Join chunks
+        run: |
+          mkdir -p work/out
+          N=$(printf '%03d' ${{ matrix.shard }})
+          ls work/parts/mini_${N}_*.mp4 | sort | sed "s|^|file '$PWD/|; s|$|'|" > work/list.txt
+          ffmpeg -v error -y -f concat -safe 0 -i work/list.txt -c copy work/out/part_${N}.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.shard }}
+          path: work/out/part_*.mp4
+          retention-days: 1
+
+  assemble:
+    needs: [plan, render]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: work/plan
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: part-*
+          merge-multiple: true
+          path: work/parts
+      - name: Mix audio and assemble
+        run: python3 engine/assemble.py --parts work/parts --plan work/plan/plan.json --voice work/plan/voice.mp3 --music assets/music/roblox-story-bg.mp3 --out work/final
+      - name: Publish download link
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="video-${{ github.run_id }}"
+          gh release create "$TAG" work/final/final.mp4 --title "Video $TAG" --notes "Rendered by run #${{ github.run_number }}. Deleted automatically after 3 days."
+          echo "link=https://github.com/${{ github.repository }}/releases/download/$TAG/final.mp4" >> "$GITHUB_OUTPUT"
+          # delete releases older than 3 days
+          gh release list --limit 100 --json tagName,createdAt -q '.[] | select(.tagName|startswith("video-")) | select((now - (.createdAt|fromdateiso8601)) > 259200) | .tagName' | while read t; do gh release delete "$t" --cleanup-tag -y || true; done
+      - name: Send to Telegram
+        env:
+          RELEASE_LINK: ${{ steps.rel.outputs.link }}
+        run: python3 bot/finish.py work/final
+
+  notify_failure:
+    needs: [plan, render, assemble]
+    if: ${{ always() && (needs.plan.result == 'failure' || needs.render.result == 'failure' || needs.assemble.result == 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - run: python bot/notify.py failed
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
