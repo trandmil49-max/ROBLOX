@@ -1,0 +1,15 @@
+LANG: en
+TITLE: The Pet Shop at Night
+CAST:
+Max | teen | skin=peach | hair=spiky,black | top=green | outfit=jacket | top2=yellow | bottom=jeans
+Lily | girl | skin=tan | hair=ponytail,ginger | top=pink | outfit=hoodie | bottom=navy | acc=glasses
+SHOTS:
+street@day | wide/push | *Max=happy:walk | props=dog :: Every evening, Max walked his dog
+street@day | medium/pan | *Max=happy:walk, Lily=happy:walk :: down the same quiet street with his friend Lily.
+street@dusk | closeup | *Max=worried:look :: But tonight, something felt wrong.
+shop@night | wide/push | *Max=neutral:idle :: The pet shop was glowing, and the door was wide open.
+street@dusk | closeup/push | *Max=surprised:shock :: Max froze.
+street@dusk | medium | *Lily=scared:tremble, Max=shocked:shock :: Inside, a hundred tiny eyes were staring right at them.
+house@night | low | *Max=scared:run :: Then his phone started ringing!
+basement@dark | closeup | *Lily=evil:point :: And the cabinet slowly opened.
+street@night | wide/pull | *Max=cry:run, Lily=scared:run :: They ran home as fast as they could.
